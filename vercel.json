@@ -5,10 +5,7 @@
   "functions": {
     "api/youtube.js": {
       "maxDuration": 300,
-      "includeFiles": [
-        "bin/yt-dlp*",
-        "node_modules/ffmpeg-static/**"
-      ]
+      "includeFiles": "{bin/yt-dlp*,node_modules/ffmpeg-static/**}"
     }
   }
 }
