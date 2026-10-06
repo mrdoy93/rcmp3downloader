@@ -24,6 +24,19 @@ The repository includes a Vercel Function for `/api/youtube`. Vercel runs the Li
 
 Vercel imports are capped at 200 MB to leave room for merging inside the function's temporary storage, and the function duration still applies, so very large or long downloads can fail. YouTube can also occasionally challenge or block cloud-provider IP addresses; the Windows desktop app remains the most reliable option when that happens.
 
+### YouTube sign-in challenges
+
+If YouTube reports "Sign in to confirm you're not a bot," configure one of the following server-side options. Never commit a cookies file or expose it through client-side code.
+
+- For a local server or development desktop app, set `YTDLP_COOKIES_FROM_BROWSER` to `chrome`, `edge`, or `firefox` before starting the app. The selected browser must have a working YouTube session. Alternatively, set `YTDLP_COOKIES_FILE` to the absolute path of a Netscape-format `cookies.txt` file.
+- For Vercel, export only the required YouTube cookies to a Netscape-format `cookies.txt` file, base64-encode the file, save the result as the encrypted `YTDLP_COOKIES_BASE64` environment variable, and redeploy. In PowerShell, the encoding command is:
+
+  ```powershell
+  [Convert]::ToBase64String([IO.File]::ReadAllBytes("cookies.txt")) | Set-Clipboard
+  ```
+
+Use a dedicated account if authentication is necessary: YouTube rotates session cookies and may restrict accounts used by downloaders. Refresh the secret if the app says the configured sign-in session was rejected. Cookies may still fail from a hosted IP; in that case, use the desktop app so the browser session and downloader share the same network.
+
 The first desktop run prepares Electron and downloads the official Windows `yt-dlp` executable, verifies its SHA-256 digest from the GitHub release, and caches it in `bin/`. YouTube imports work in the desktop app and the local web server. The packaged Electron runtime supplies the JavaScript engine required by current YouTube extraction.
 
 ## Build

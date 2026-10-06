@@ -5,6 +5,7 @@ const path = require('node:path')
 
 const maxImportedBytes = 512 * 1024 * 1024
 const youtubeHosts = ['youtube.com', 'youtu.be', 'youtube-nocookie.com']
+const cookieBrowsers = new Set(['brave', 'chrome', 'chromium', 'edge', 'firefox', 'opera', 'safari', 'vivaldi', 'whale'])
 function videoFormatForQuality(quality = 480) {
   if (![360, 480, 720, 1080].includes(quality)) throw new Error('Choose a supported video quality: 360p, 480p, 720p, or 1080p.')
   return `bestvideo[ext=mp4][vcodec^=avc1][height<=${quality}]+bestaudio[ext=m4a]/bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]`
@@ -33,6 +34,47 @@ function validateYoutubeUrl(value) {
     throw new Error('Only HTTPS links from YouTube are accepted by the YouTube downloader.')
   }
   return url.href
+}
+
+async function youtubeAuthenticationArgs(temporaryDirectory, options = {}) {
+  const cookiesFile = options.cookiesFile ?? process.env.YTDLP_COOKIES_FILE
+  const cookiesBase64 = options.cookiesBase64 ?? process.env.YTDLP_COOKIES_BASE64
+  const cookiesFromBrowser = options.cookiesFromBrowser ?? process.env.YTDLP_COOKIES_FROM_BROWSER
+  const configuredMethods = [cookiesFile, cookiesBase64, cookiesFromBrowser].filter((value) => String(value || '').trim())
+  if (configuredMethods.length > 1) {
+    throw new Error('Configure only one YouTube cookie source: file, base64, or browser.')
+  }
+
+  if (cookiesFromBrowser) {
+    const browser = String(cookiesFromBrowser).trim().toLowerCase()
+    if (!cookieBrowsers.has(browser)) {
+      throw new Error(`Unsupported cookie browser "${browser}". Use Chrome, Edge, Firefox, Brave, Chromium, Opera, Safari, Vivaldi, or Whale.`)
+    }
+    return ['--cookies-from-browser', browser]
+  }
+
+  if (cookiesFile) {
+    const resolvedCookiesFile = path.resolve(String(cookiesFile).trim())
+    await fs.access(resolvedCookiesFile)
+    return ['--cookies', resolvedCookiesFile]
+  }
+
+  if (cookiesBase64) {
+    const encodedCookies = String(cookiesBase64).replace(/\s/g, '')
+    if (!encodedCookies || encodedCookies.length > 2 * 1024 * 1024 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encodedCookies)) {
+      throw new Error('YTDLP_COOKIES_BASE64 is not valid base64 cookie data.')
+    }
+    const cookies = Buffer.from(encodedCookies, 'base64')
+    const firstLine = cookies.toString('utf8', 0, Math.min(cookies.length, 64)).replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0]
+    if (firstLine !== '# HTTP Cookie File' && firstLine !== '# Netscape HTTP Cookie File') {
+      throw new Error('YTDLP_COOKIES_BASE64 must contain a Netscape-format cookies.txt file.')
+    }
+    const temporaryCookiesFile = path.join(temporaryDirectory, 'youtube-cookies.txt')
+    await fs.writeFile(temporaryCookiesFile, cookies, { mode: 0o600 })
+    return ['--cookies', temporaryCookiesFile]
+  }
+
+  return []
 }
 
 function runYtDlp(executable, args, jsRuntimeIsElectron) {
@@ -76,12 +118,19 @@ function runYtDlp(executable, args, jsRuntimeIsElectron) {
       if (settled) return
       if (code === 0) return finish(null, stdout)
       const detail = stderr.split(/\r?\n/).filter(Boolean).at(-1)?.replace(/^ERROR:\s*/i, '')
+      if (/sign in to confirm you(?:'|’|\u2019)re not a bot/i.test(detail || '')) {
+        const usedAuthentication = args.includes('--cookies') || args.includes('--cookies-from-browser')
+        const message = usedAuthentication
+          ? 'YouTube rejected the configured sign-in session. Refresh the YouTube cookies and try again.'
+          : 'YouTube challenged this network. Use the Windows desktop app, or configure YouTube cookies for this server.'
+        return finish(new Error(message))
+      }
       finish(new Error(detail || 'YouTube could not provide a downloadable media stream.'))
     })
   })
 }
 
-async function downloadYoutubeToFile({ urlValue, mediaType, executable, jsRuntime, jsRuntimeIsElectron = false, videoQuality = 480, maxBytes = maxImportedBytes }) {
+async function downloadYoutubeToFile({ urlValue, mediaType, executable, jsRuntime, jsRuntimeIsElectron = false, videoQuality = 480, maxBytes = maxImportedBytes, cookiesFile, cookiesBase64, cookiesFromBrowser }) {
   const url = validateYoutubeUrl(urlValue)
   if (mediaType !== 'audio' && mediaType !== 'video') throw new Error('Choose a valid YouTube download type.')
   const format = mediaType === 'audio' ? 'bestaudio/best' : videoFormatForQuality(videoQuality)
@@ -108,10 +157,12 @@ async function downloadYoutubeToFile({ urlValue, mediaType, executable, jsRuntim
 
   const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'local-media-studio-'))
   try {
+    const authenticationOptions = await youtubeAuthenticationArgs(temporaryDirectory, { cookiesFile, cookiesBase64, cookiesFromBrowser })
     const outputTemplate = path.join(temporaryDirectory, '%(title).160B [%(id)s].%(ext)s')
     const output = await runYtDlp(executable, [
       '--no-config',
       '--no-playlist',
+      ...authenticationOptions,
       '--socket-timeout', '30',
       '--retries', '3',
       '--extractor-retries', '3',
@@ -224,4 +275,4 @@ async function handleYoutubeRequest(request, response, options) {
   }
 }
 
-module.exports = { downloadYoutubeMedia, downloadYoutubeToFile, handleYoutubeRequest, videoFormat, videoFormatForQuality }
+module.exports = { downloadYoutubeMedia, downloadYoutubeToFile, handleYoutubeRequest, videoFormat, videoFormatForQuality, youtubeAuthenticationArgs }

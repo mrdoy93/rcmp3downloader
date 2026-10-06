@@ -4,7 +4,44 @@ const { spawnSync } = require('node:child_process')
 const fs = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
-const { videoFormatForQuality } = require('../server/youtube.cjs')
+const { videoFormatForQuality, youtubeAuthenticationArgs } = require('../server/youtube.cjs')
+
+test('YouTube authentication accepts an explicitly selected local browser', async () => {
+  const args = await youtubeAuthenticationArgs(os.tmpdir(), {
+    cookiesFromBrowser: 'Firefox', cookiesFile: '', cookiesBase64: '',
+  })
+  assert.deepEqual(args, ['--cookies-from-browser', 'firefox'])
+  await assert.rejects(
+    youtubeAuthenticationArgs(os.tmpdir(), { cookiesFromBrowser: 'unknown', cookiesFile: '', cookiesBase64: '' }),
+    /Unsupported cookie browser/,
+  )
+})
+
+test('YouTube authentication materializes hosted cookie secrets inside the temporary download directory', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'media-cookie-test-'))
+  try {
+    const cookieText = '# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\ttest\tvalue\n'
+    const args = await youtubeAuthenticationArgs(directory, {
+      cookiesBase64: Buffer.from(cookieText).toString('base64'), cookiesFile: '', cookiesFromBrowser: '',
+    })
+    assert.equal(args[0], '--cookies')
+    assert.equal(path.dirname(args[1]), directory)
+    assert.equal(await fs.readFile(args[1], 'utf8'), cookieText)
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('YouTube authentication rejects ambiguous or malformed cookie configuration', async () => {
+  await assert.rejects(
+    youtubeAuthenticationArgs(os.tmpdir(), { cookiesFile: 'cookies.txt', cookiesFromBrowser: 'edge', cookiesBase64: '' }),
+    /only one YouTube cookie source/,
+  )
+  await assert.rejects(
+    youtubeAuthenticationArgs(os.tmpdir(), { cookiesBase64: Buffer.from('not cookies').toString('base64'), cookiesFile: '', cookiesFromBrowser: '' }),
+    /Netscape-format/,
+  )
+})
 
 for (const combined of [false, true]) {
   test(`video selector supports ${combined ? 'combined fallback' : 'separate video and audio'}`, async () => {
