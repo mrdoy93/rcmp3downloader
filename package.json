@@ -1,0 +1,76 @@
+{
+  "name": "rcmp3downloader",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/copy-ffmpeg-core.mjs && vite --host 127.0.0.1",
+    "prepare:electron": "install-electron",
+    "prepare:yt-dlp": "node scripts/download-yt-dlp.mjs",
+    "setup:desktop": "npm run prepare:electron && npm run prepare:yt-dlp",
+    "dev:desktop": "node scripts/copy-ffmpeg-core.mjs && npm run setup:desktop && concurrently -k \"vite --host 127.0.0.1 --port 54123 --strictPort\" \"wait-on http://127.0.0.1:54123 && electron . --dev\"",
+    "build": "node scripts/copy-ffmpeg-core.mjs && tsc -b && vite build",
+    "desktop": "electron .",
+    "package:desktop": "npm run setup:desktop && npm run build && electron-builder --win nsis",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "start": "node server/web-server.cjs"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.localmediastudio.converter",
+    "productName": "Local Media Studio",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "bin/ffmpeg.exe"
+      },
+      {
+        "from": "bin/yt-dlp.exe",
+        "to": "bin/yt-dlp.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "artifactName": "Local-Media-Studio-Setup.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "nsis": {
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Local Media Studio"
+    }
+  },
+  "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "ffmpeg-static": "^5.3.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^9.1.2",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "wait-on": "^8.0.1"
+  }
+}
