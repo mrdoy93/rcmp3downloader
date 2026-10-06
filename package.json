@@ -10,6 +10,7 @@
     "setup:desktop": "npm run prepare:electron && npm run prepare:yt-dlp",
     "dev:desktop": "node scripts/copy-ffmpeg-core.mjs && npm run setup:desktop && concurrently -k \"vite --host 127.0.0.1 --port 54123 --strictPort\" \"wait-on http://127.0.0.1:54123 && electron . --dev\"",
     "build": "node scripts/copy-ffmpeg-core.mjs && tsc -b && vite build",
+    "build:vercel": "node scripts/download-yt-dlp.mjs && npm run build",
     "desktop": "electron .",
     "package:desktop": "npm run setup:desktop && npm run build && electron-builder --win nsis",
     "lint": "oxlint",

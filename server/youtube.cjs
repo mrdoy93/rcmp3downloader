@@ -81,7 +81,7 @@ function runYtDlp(executable, args, jsRuntimeIsElectron) {
   })
 }
 
-async function downloadYoutubeMedia({ urlValue, mediaType, executable, jsRuntime, jsRuntimeIsElectron = false, videoQuality = 480 }) {
+async function downloadYoutubeToFile({ urlValue, mediaType, executable, jsRuntime, jsRuntimeIsElectron = false, videoQuality = 480, maxBytes = maxImportedBytes }) {
   const url = validateYoutubeUrl(urlValue)
   if (mediaType !== 'audio' && mediaType !== 'video') throw new Error('Choose a valid YouTube download type.')
   const format = mediaType === 'audio' ? 'bestaudio/best' : videoFormatForQuality(videoQuality)
@@ -116,7 +116,7 @@ async function downloadYoutubeMedia({ urlValue, mediaType, executable, jsRuntime
       '--retries', '3',
       '--extractor-retries', '3',
       '--fragment-retries', '3',
-      '--max-filesize', '512M',
+      '--max-filesize', String(maxBytes),
       '--format', format,
       ...videoOptions,
       '--output', outputTemplate,
@@ -141,16 +141,32 @@ async function downloadYoutubeMedia({ urlValue, mediaType, executable, jsRuntime
 
     const stats = await fs.stat(resolvedPath)
     if (!stats.isFile() || stats.size === 0) throw new Error('YouTube returned an empty media file.')
-    if (stats.size > maxImportedBytes) throw new Error('This video is over the 512 MB download limit.')
-    const contents = await fs.readFile(resolvedPath)
-    const data = contents.buffer.slice(contents.byteOffset, contents.byteOffset + contents.byteLength)
+    if (stats.size > maxBytes) throw new Error(`This video is over the ${Math.floor(maxBytes / 1024 / 1024)} MB download limit.`)
     const extension = path.extname(resolvedPath).toLowerCase()
     const type = mediaType === 'audio'
       ? ({ '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.opus': 'audio/opus', '.webm': 'audio/webm' }[extension] || 'audio/*')
       : ({ '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska' }[extension] || 'video/*')
-    return { name: safeFileName(path.basename(resolvedPath)), data, type }
-  } finally {
+    return {
+      name: safeFileName(path.basename(resolvedPath)),
+      path: resolvedPath,
+      size: stats.size,
+      type,
+      cleanup: () => fs.rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined),
+    }
+  } catch (error) {
     await fs.rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
+async function downloadYoutubeMedia(options) {
+  const result = await downloadYoutubeToFile(options)
+  try {
+    const contents = await fs.readFile(result.path)
+    const data = contents.buffer.slice(contents.byteOffset, contents.byteOffset + contents.byteLength)
+    return { name: result.name, data, type: result.type }
+  } finally {
+    await result.cleanup()
   }
 }
 
@@ -208,4 +224,4 @@ async function handleYoutubeRequest(request, response, options) {
   }
 }
 
-module.exports = { downloadYoutubeMedia, handleYoutubeRequest, videoFormat, videoFormatForQuality }
+module.exports = { downloadYoutubeMedia, downloadYoutubeToFile, handleYoutubeRequest, videoFormat, videoFormatForQuality }

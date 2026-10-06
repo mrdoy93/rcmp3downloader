@@ -152,16 +152,16 @@ export async function fetchYoutubeMedia(rawUrl: string, mediaType: 'audio' | 'vi
       body: JSON.stringify({ url: rawUrl.trim(), mediaType, videoQuality }),
     })
   } catch {
-    throw new Error('Could not reach the local YouTube downloader. Start the app with npm run dev or npm start.')
+    throw new Error('Could not reach the YouTube downloader service. Retry shortly or use the desktop app.')
   }
   if (!response.ok) {
     const detail = await response.json().catch(() => null)
-    throw new Error(detail?.error || 'The YouTube downloader is unavailable. Start the app with npm run dev or npm start.')
+    throw new Error(detail?.error || 'The YouTube downloader is unavailable on this deployment.')
   }
   const mimeType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase()
   const encodedName = response.headers.get('x-media-name')
   if (!encodedName || (!mimeType.startsWith('audio/') && !mimeType.startsWith('video/'))) {
-    throw new Error('The YouTube downloader is unavailable. Start the app with npm run dev or npm start.')
+    throw new Error('The YouTube downloader returned an invalid response.')
   }
   return readResponse(response, mimeType, decodeURIComponent(encodedName))
 }

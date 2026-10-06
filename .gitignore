@@ -13,6 +13,7 @@ dist-ssr
 *.local
 public/ffmpeg/
 bin/yt-dlp*.exe
+bin/yt-dlp
 
 # Editor directories and files
 .vscode/*

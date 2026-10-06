@@ -3,20 +3,26 @@ import { access, chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const releaseApi = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
-const assetNames = {
-  x64: 'yt-dlp.exe',
-  ia32: 'yt-dlp_x86.exe',
-  arm64: 'yt-dlp_arm64.exe',
+const platformAssets = {
+  win32: {
+    x64: 'yt-dlp.exe',
+    ia32: 'yt-dlp_x86.exe',
+    arm64: 'yt-dlp_arm64.exe',
+  },
+  linux: {
+    x64: 'yt-dlp_linux',
+    arm64: 'yt-dlp_linux_aarch64',
+  },
 }
-const assetName = assetNames[process.arch]
+const assetName = platformAssets[process.platform]?.[process.arch]
 
-if (process.platform !== 'win32' || !assetName) {
-  throw new Error(`Desktop packaging currently supports Windows x64, x86, and ARM64 (received ${process.platform}/${process.arch}).`)
+if (!assetName) {
+  throw new Error(`The yt-dlp setup does not support ${process.platform}/${process.arch}.`)
 }
 
 const projectRoot = path.resolve(import.meta.dirname, '..')
 const binDirectory = path.join(projectRoot, 'bin')
-const destination = path.join(binDirectory, 'yt-dlp.exe')
+const destination = path.join(binDirectory, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
 
 try {
   await access(destination)
