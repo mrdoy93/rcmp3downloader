@@ -1,0 +1,10 @@
+.git
+.vercel
+.vscode
+node_modules
+dist
+release
+public/ffmpeg
+bin/*.exe
+*.log
+.env*
