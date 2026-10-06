@@ -481,7 +481,12 @@ function App() {
 
         {!desktop && <section className="desktop-download" aria-label="Download desktop application">
           <div><h2>Take your studio to desktop</h2><p>Download Local Media Studio for Windows. Convert files locally and save directly to your device.</p></div>
-          <a className="desktop-download-button" href="/api/desktop-download" download><Download size={18} /> Download for Windows</a>
+          <a
+            className="desktop-download-button"
+            href="https://github.com/mrdoy93/rcmp3downloader/releases/latest/download/Local-Media-Studio-Setup.exe"
+          >
+            <Download size={18} /> Download for Windows
+          </a>
         </section>}
 
         <footer className="page-footer">
